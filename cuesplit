@@ -1,0 +1,40 @@
+#! /bin/sh
+
+for dir in "$@"
+do
+    if [ ! -d "$dir" ]; then
+        echo "Skip $dir. It's not a directory."
+        continue
+    fi
+
+    cueFilesCount=`ls -1 "$dir" | grep '\.cue$' | wc -l`
+    albumFilesCount=`ls -1 "$dir" | egrep '\.(flac|ape|wav|alac)$' | wc -l`
+
+    if [ $cueFilesCount -eq 0 ] || [ $albumFilesCount -eq 0 ]; then
+        echo "Skip $dir. It's not an album directory."
+        continue
+    fi
+
+    if [ $albumFilesCount -gt 1 ]; then
+        echo "Skip $dir. It's already splitted"
+        continue
+    fi
+
+    cuesheet=`find "$dir" -regex '.*\.cue$'`
+    src=`find "$dir" -regex '.*\.\(flac\|ape\|wav\|alac\)$'`
+    converted=`echo "$dir/converted"`
+
+    mkdir "$dir/converted"
+
+    shnsplit -o flac -f "$cuesheet" -t "%n - %t" "$src" -d "$converted" &&
+    chmod 0666 "$converted"/*
+
+    if [ -f "$dir/converted/00 - pregap.flac" ]; then
+        rm "$dir/converted/00 - pregap.flac"
+    fi
+
+    cuetag "$cuesheet" "$converted"/*.flac &&
+    find "$dir" -maxdepth 1 ! -path "$dir" ! -name 'converted' -print0 | xargs -0 rm -r &&
+    mv "$converted"/* "$dir" &&
+    rm -r "$converted"
+done
